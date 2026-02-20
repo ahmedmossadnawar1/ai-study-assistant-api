@@ -17,7 +17,7 @@ PyPDF2==3.0.1
 
 # Text Processing & Utilities
 python-bidi==0.4.2
-arabic-reshaper==0.5.2
+arabic-reshaper>=2.0.0
 
 # System & Helpers
 requests==2.31.0
