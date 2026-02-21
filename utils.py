@@ -14,7 +14,23 @@ from typing import Optional, List, Dict, Tuple
 
 from docx import Document as DocxDocument
 from pptx import Presentation
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# LangChain replaced with built-in splitter for Python 3.14 compatibility
+class RecursiveCharacterTextSplitter:
+    def __init__(self, chunk_size=500, chunk_overlap=100, separators=None, length_function=len):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.separators = separators or ["\n\n", "\n", ". ", " ", ""]
+        self.length_function = length_function
+
+    def split_text(self, text: str) -> List[str]:
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = start + self.chunk_size
+            chunks.append(text[start:end])
+            start += self.chunk_size - self.chunk_overlap
+        return [c for c in chunks if c.strip()]
 
 # ======================================
 # FILE VALIDATION & UTILITIES
@@ -259,7 +275,6 @@ def ocr_mistral(file_obj, filename: str, client) -> Tuple[str, dict]:
                 "document_url": f"data:application/pdf;base64,{encoded}"
             }
         else:
-            # Images
             document = {
                 "type": "image_url",
                 "image_url": f"data:image/{ext.replace('.', '')};base64,{encoded}"
@@ -428,8 +443,8 @@ Create a beautifully organized mind map from the following text.
 
 Requirements:
 - Start with a clear, concise MAIN TOPIC.
-- Create 4–6 MAIN BRANCHES only.
-- Each main branch should have 2–5 sub-points.
+- Create 4-6 MAIN BRANCHES only.
+- Each main branch should have 2-5 sub-points.
 - Use emojis sparingly for visual appeal.
 - Use clear hierarchical formatting (main topic → branches → sub-points).
 - Write everything in English.
@@ -468,12 +483,7 @@ def generate_question_bank(client, text: str, num_questions: int, lang: str) -> 
   - صح/خطأ (~30%)
   - اختيار من متعدد (~40%)
   - أسئلة مقالية/قصيرة (~30%)
-- ضع عنوانًا واضحًا لكل قسم:
-  - أولًا: أسئلة صح وخطأ
-  - ثانيًا: أسئلة اختيار من متعدد
-  - ثالثًا: أسئلة مقالية قصيرة
-- اجعل المسافات بين الأسئلة واضحة.
-- إجابات أسئلة الصح والخطأ بين قوسين مثل: (صح) أو (خطأ).
+- ضع عنوانًا واضحًا لكل قسم.
 - اجعل اللغة عربية واضحة وبسيطة.
 """
         else:
@@ -488,13 +498,7 @@ Requirements:
   - True/False (~30%)
   - Multiple Choice (~40%)
   - Short Answer (~30%)
-- Add clear section headings:
-  - Section 1: True/False Questions
-  - Section 2: Multiple Choice Questions
-  - Section 3: Short Answer Questions
-- Use clear spacing between questions.
-- True/False answers MUST be in parentheses like (True) or (False).
-- Provide brief explanations or notes after the answer when possible.
+- Add clear section headings.
 - Use clear, exam-style English.
 """
 
@@ -530,7 +534,6 @@ def generate_chat_response(client, context: str, user_message: str, lang: str) -
 2. إذا كان السؤال خارج نطاق المستند، قل بأدب أنك تستطيع فقط الإجابة بناءً على المستند المرفوع
 3. كن مفيدًا وتعليميًا ودقيقًا
 4. أجب باللغة العربية
-5. حافظ على الإجابات موجزة لكن مفيدة
 
 سؤال المستخدم:
 {user_message}
@@ -543,11 +546,10 @@ DOCUMENT CONTEXT:
 {context[:8000]}
 
 IMPORTANT INSTRUCTIONS:
-1. You MUST answer based ONLY on the document content provided above
-2. If the question is outside the document scope, politely say you can only answer based on the uploaded document
+1. Answer based ONLY on the document content provided above
+2. If the question is outside the document scope, politely say so
 3. Be helpful, educational, and precise
 4. Answer in English
-5. Keep answers concise but informative
 
 USER'S QUESTION:
 {user_message}
