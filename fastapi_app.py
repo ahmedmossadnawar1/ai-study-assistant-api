@@ -3,6 +3,9 @@ FastAPI Study Assistant Server
 AI-powered study assistant with document processing and multiple learning features
 """
 
+
+from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -391,23 +394,58 @@ async def chat_endpoint(request: ChatRequest):
     if not request.user_message or not request.user_message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-    try:
-        response = generate_chat_response(
-            mistral_client,
-            request.context,
-            request.user_message,
-            request.language
-        )
-        return {
-            "question": request.user_message,
-            "answer": response,
-            "language": request.language,
-            "filename": request.filename,
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in chat: {str(e)}")
+    # Build system prompt based on language
+    if request.language == "ar":
+        system_prompt = f"""أنت مساعد دراسة متخصص في شرح ومناقشة المستند المرفوع.
 
+محتوى المستند:
+{request.context[:8000]}
+
+تعليمات مهمة:
+1. أجب فقط بناءً على محتوى المستند
+2. إذا كان السؤال خارج نطاق المستند، قل ذلك بأدب
+3. أجب باللغة العربية
+4. كن مفيداً وتعليمياً ودقيقاً"""
+    else:
+        system_prompt = f"""You are an AI Study Assistant for the uploaded document.
+
+DOCUMENT CONTEXT:
+{request.context[:8000]}
+
+INSTRUCTIONS:
+1. Answer ONLY based on the document content
+2. If outside scope, politely say so
+3. Answer in English
+4. Be helpful, educational, and precise"""
+
+    async def stream_response():
+        try:
+            with mistral_client.chat.stream(
+                model="mistral-large-latest",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": request.user_message}
+                ],
+                temperature=0.7,
+                max_tokens=1500,
+            ) as stream:
+                for chunk in stream:
+                    delta = chunk.data.choices[0].delta.content
+                    if delta:
+                        yield delta
+        except Exception as e:
+            yield f"\n❌ Error: {str(e)}"
+
+    return StreamingResponse(
+        stream_response(),
+        media_type="text/plain",
+        headers={
+            "X-Question": request.user_message,
+            "X-Language": request.language,
+            "X-Filename": request.filename,
+            "X-Timestamp": datetime.now().isoformat(),
+        }
+    )
 @app.post("/batch-chat")
 async def batch_chat_endpoint(
     filename: str = Form(...),
